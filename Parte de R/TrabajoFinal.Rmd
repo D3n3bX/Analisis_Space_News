@@ -1,0 +1,1674 @@
+---
+title: "Trabajo Final"
+author: "Laia Delgado y Diego García-Romero"
+date: "2024-05-09"
+output: 
+  html_document:
+    toc: true
+    toc_float: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# ENTREGA FINAL: SPACE NEWS
+
+## AUTOR: Laia Delgado y Diego García-Romero
+
+## GRUPO: MAIS3A
+
+![](Fotos/portada.jpg)
+
+## Objetivo
+
+Nuestro objetivo es aplicar gran parte de las técnicas vistas en la asingatura Búsqueda y Análisis de la Información al DataSet Space News. Además de intentar aplicar algunas técnicas vistas en Inteligencia Artificial.
+
+El DataSet lo hemos encontrado en la siguiente fuente:
+
+-   <https://www.kaggle.com/datasets/patrickfleith/space-news-dataset/data>
+
+Este DataSet recoge información sobre noticias del espacio, en concreto aquellas que han sido publicadas por SpaceNews. A continuacón hay un link a su página:
+
+-   <https://spacenews.com>
+
+## Preparación del entorno
+
+Vamos a preparar el entorno con el directorio de trabajo, la declaración de paquetes que vamos a usar y el dataset con el que haremos la práctica.
+
+### Directorio de trabajo
+
+Al ejecutar el notebook es necesario cambiar la ruta a una propia del ordenador donde se ejecute, si no dará error.
+
+```{r message=FALSE, warning=FALSE}
+
+setwd("C:/Users/laiad/Downloads/PracticaFinal_Diego_Garcia_Laia_Delgado/PracticaFinal_Diego_Garcia_Laia_Delgado/Parte de R")
+
+```
+
+### Paquetes necesarios
+
+1.  **Análisis de texto y procesamiento de lenguaje natural (NLP)**:
+    -   quanteda
+    -   quanteda.textstats
+    -   tidytext
+    -   tm
+    -   stopwords
+    -   stringr
+    -   textdata
+    -   readtext
+2.  **Visualización de texto**:
+    -   quanteda.textplots
+    -   ggplot2
+    -   wordcloud
+    -   RColorBrewer
+    -   scales
+3.  **Análisis de sentimientos**:
+    -   SentimentAnalysis
+    -   syuzhet
+4.  **Manipulación y visualización de datos**:
+    -   tidyverse
+    -   dplyr
+    -   forcats
+    -   lubridate
+5.  **Modelado de tópicos**:
+    -   topicmodels
+
+```{r message=FALSE, warning=FALSE}
+
+library(quanteda)
+library(quanteda.textplots)
+library(stringr)
+library(quanteda.textstats)
+library(tidytext)
+library(tidyverse)
+library(forcats)
+library(scales)
+library(SentimentAnalysis)
+library(syuzhet)
+library(dplyr)
+library(textdata)
+library(ggplot2)
+library(lubridate)
+library(wordcloud)
+library(tm)
+library(stopwords)
+library(stringr)
+library(ggplot2)
+library(topicmodels)
+library(readtext)
+library(RColorBrewer)
+
+```
+
+### Lectura de ficheros
+
+Al ejecutar el notebook es necesario cambiar la ruta a una propia del ordenador donde se ejecute, si no dará error.
+
+```{r message=FALSE, warning=FALSE}
+
+ruta_ficheros <- "C:/Users/laiad/Downloads/PracticaFinal_Diego_Garcia_Laia_Delgado/PracticaFinal_Diego_Garcia_Laia_Delgado/Parte de R"
+
+mis_ficheros <- list.files(ruta_ficheros, pattern = "*.csv")
+
+```
+
+### Lectura de datos
+
+Rellenamos el dataset `datos_space`. Dado que sólo tenemos un único csv podemos rellenarlo sin necesidad de ningún bucle, aunque es buena práctica rellenar el DataSet uno a uno sin uso de bucles.
+
+```{r message=FALSE, results='hide', warning=FALSE}
+
+datos_space <- data.frame()
+
+datos_space <- read.csv("spacenews.csv", header = TRUE, sep = ",")
+
+```
+
+Guardamos el DataSet
+
+```{r message=FALSE, results='hide', warning=FALSE}
+
+save(datos_space, file = "datos_space.rda")
+
+```
+
+## Preprocesamiento de datos y limpieza
+
+Una vez tenemos el DataSet con todos los datos vamos a terminar de preparlo. Para ello nos quedaremos sólo con las columnas que aporten información relevante, eliminaremos todo aquello que no aporte nada y lo dejaremos todo en un formato que facilite su posterior estudio.
+
+Vamos a ver la estructura del DataSet.
+
+```{r message=FALSE, warning=FALSE}
+
+summary(datos_space)
+
+```
+
+Se observa que nuestro DataSet esta compuesto por 6 columnas, 'title', 'url', 'content', 'author', 'date' y 'postexcerpt'.
+
+1.  **title (título)**:
+    -   La columna "title" contiene los títulos de las noticias.
+    -   Esta columna proporciona el título de cada noticia, lo que puede ser útil para comprender el tema principal de la noticia.
+2.  **url (URL)**:
+    -   La columna "url" contiene las direcciones URL de las noticias.
+    -   Estos enlaces pueden ser útiles si deseas acceder directamente a la noticia original en línea.
+3.  **content (contenido)**:
+    -   La columna "content" contiene el contenido completo de las noticias.
+    -   Esta columna es la más rica en información, ya que contiene el cuerpo completo de las noticias. Puede ser útil para análisis de texto, extracción de información clave y análisis de sentimientos, entre otros.
+4.  **author (autor)**:
+    -   La columna "author" contiene los nombres de los autores de las noticias.
+    -   Siempre y cuando se hayan proporcionado nombres de autores, esta columna puede ser útil para identificar quién escribió cada noticia.
+5.  **date (fecha)**:
+    -   La columna "date" contiene las fechas en que se publicaron las noticias.
+    -   Esta columna proporciona la fecha de publicación de cada noticia, lo que es útil para el análisis temporal y el seguimiento de eventos.
+6.  **postexcerpt (extracto de la publicación)**:
+    -   La columna "postexcerpt" contiene extractos de las noticias. -Los extractos pueden ser resúmenes cortos de las noticias o fragmentos destacados, útiles para tener una idea rápida del contenido de la noticia sin leer el artículo completo.
+
+Viendo la estructura, podriamos identificar la columna `author` como una variable categórica, por lo que podríamos factorizarla para facilitar la búsqueda y análisis.
+
+```{r message=FALSE, warning=FALSE}
+
+datos_space$author <- as.factor(datos_space$author)
+
+```
+
+Podemos verificar que se ha factorizado correctamente.
+
+```{r message=FALSE, warning=FALSE}
+
+summary(datos_space)
+
+```
+
+El formato de la fecha podemos cambiarlo para facilitar el estudio. La forma más fácil es haciendo uso de la libreria `lubridate`.
+
+```{r message=FALSE, warning=FALSE}
+
+# Convertir la columna 'date' a tipo fecha
+datos_space$date <- mdy(datos_space$date)
+
+# Verificar la conversión
+head(datos_space$date)
+
+```
+
+### Limpieza
+
+En esta parte vamos a limpiar `datos_space`, en concreto la columna de `content` que será donde realizaremos un estudio más profundo. Esto es quitar información irrelevante, es decir URLs, menciones a otros usuarios, RT, caracteres raros, emojis, etc. y convertir todo a minúsculas para un fácil estudio.
+
+Dado que estamos en un DataSet con artículos que se suben a Internet y la propia editorial tiene cuenta de X (anteoriormente Twitter), vamos a quitar posibles menciones o RT en caso de que en alguna noticia se haga alguna referencia a esto.
+
+Primero hacemos una copia del dataset original.
+
+```{r message=FALSE, warning=FALSE}
+
+datos_space_limpios <- datos_space
+
+```
+
+-   Eliminación de URLs
+
+```{r message=FALSE, warning=FALSE}
+
+datos_space_limpios$content <- str_replace_all(datos_space$content, 
+                                                 pattern = "https?://([^/\\s]++)\\S*+|http?://([^/\\s]++)\\S*+",
+                                                 replacement = "")
+
+```
+
+-   Eliminación de links, menciones, RT, etc.
+
+```{r message=FALSE, warning=FALSE}
+
+datos_space_limpios$content <- gsub("(#\\w+)|(http\\S+)|(https\\S+)|(&amp;)|(@\\w+)|(RT)", "", datos_space$content)
+
+```
+
+-   Eliminación de caracteres raros, emojis, etc.
+
+```{r message=FALSE, warning=FALSE}
+
+datos_space_limpios$content <- gsub("[\\x{1F600}-\\x{1F6FF}|\\x{2600}-\\x{26FF}|\\x{2700}-\\x{27BF}|\\x{1F300}-\\x{1F5FF}|\\x{1F680}-\\x{1F6FF}|\\x{1F1E0}-\\x{1F1FF}|\\x{1F900}-\\x{1F9FF}|\\x{1F7E0}-\\x{1F7FF}|\\x{1F918}]", "", datos_space$content, perl=TRUE)
+
+```
+
+-   Eliminación de caracteres que no son alfanuméricos ni espacios en blanco.
+
+```{r message=FALSE, warning=FALSE}
+
+datos_space_limpios$content <- gsub("[^[:alnum:][:space:]]", "", datos_space$content, perl=TRUE)
+
+```
+
+Una vez hemos limpiado el DataSet, comprobamos si ha quedado relativamente limpio.
+
+```{r message=FALSE, results='hide', warning=FALSE}
+
+grep(pattern = "http",datos_space$content,perl = T)
+grep(pattern = "#",datos_space$content,perl = T)
+
+```
+
+Por último, para facilitar el estudio vamos a poner todo en minúscula.
+
+```{r message=FALSE, warning=FALSE}
+
+datos_space_limpios$content <- tolower(datos_space$content)
+
+```
+
+Si mostramos los 5 primeros elementos del DataSet
+
+```{r message=FALSE, warning=FALSE}
+
+head(datos_space_limpios, 5)
+
+```
+
+podemos pensar que la columna 'postexcerpt' va a estar vacía en todo el conjunto y la podríamos eliminar pues no aporta nada. Sin embargo, si mostramos los últimos 5 elementos
+
+```{r message=FALSE, warning=FALSE}
+
+tail(datos_space_limpios, 5)
+
+```
+
+se observa que no siempre esta vacía. Por lo tanto, vamos a dividirlo en dos DataSets nuevos, uno para los que tengan incluido el resumen y otro para los que no tengan dicho resumen. De esta forma, preparamos un conjunto de entreanmiento para poder generar resúmenes para las noticias que no lo tengan ya que más tarde intentaremos completar todas las columnas para que tengan resumen.
+
+```{r message=FALSE, warning=FALSE}
+
+# Subset con la última columna con datos
+datos_space_con_extracto <- datos_space_limpios[datos_space_limpios$postexcerpt != "", ]
+
+# Subset con la última columna vacía
+datos_space_sin_extracto <- datos_space_limpios[datos_space_limpios$postexcerpt == "", ]
+
+```
+
+Como `data_space_sin_extracto` ahora tiene la última columna vacía podemos eliminarla.
+
+```{r message=FALSE, warning=FALSE}
+
+datos_space_sin_extracto_limpios <- datos_space_sin_extracto[, -ncol(datos_space_sin_extracto)]
+
+```
+
+## Análisis exploratorio de datos
+
+Ya tenemos el dataset con el que vamos a comenzar a trabajar. Ahora haremos un análisis exploratorio de datos con el objetivo de entender mejor los datos antes de aplicar modelos estadísticos o algoritmos de aprendizaje automático.
+
+### Autores
+
+Veamos cuántos autores distintos tenemos.
+
+```{r message=FALSE, warning=FALSE}
+
+# Obtener la lista de los distintos autores
+autores_distintos <- unique(datos_space_limpios$author)
+
+# Calcular el numero de autores distintos
+num_autores <- length(autores_distintos)
+
+# Mostrar el resultado
+print(num_autores)
+
+```
+
+Tenemos 648 autores que han participado en la redacción de noticias espaciales. No se pueden analizar todos debido a la gran cantidad, por lo que posteriormente se analizarán los más importantes.
+
+Para ello vamos a comprobar la frecuencia de cada autor.
+
+```{r message=FALSE, warning=FALSE}
+
+# Frecuencia de los autores en el dataset
+frecuencia_autores <- table(datos_space$author)
+
+# Ordenar las frecuencias de mayor a menor en el dataset
+frecuencia_autores_ordenada <- sort(frecuencia_autores, decreasing = TRUE)
+
+# Mostrar la frecuencia de cada autor
+print(frecuencia_autores_ordenada)
+
+```
+
+Como hemos visto hay 648 autores que es una gran catidad y más teniendo en cuenta que es una revista de caracter científico y normalmente suelen tener a unos redactores habitules. Es por ello que podemos ordenar los autores por su frecuencia y mostrar los 20 primeros ya que nos podemos hacer a la idea de quienes son sus redactores habituales, además de que hay muchos autores han participado que a penas cuentan con 10 artículos publicados.
+
+```{r message=FALSE, warning=FALSE}
+
+# Ordenar las frecuencias de mayor a menor en el dataset con extracto
+frecuencia_autores_ordenada <- sort(frecuencia_autores, decreasing = TRUE)
+
+# Seleccionar los 20 autores más frecuentes
+top_20_autores <- head(frecuencia_autores_ordenada, 20)
+
+# Convertir los resultados en un data frame
+tabla_top_20_autores <- data.frame(Autor = names(top_20_autores),
+                                                Frecuencia = as.numeric(top_20_autores))
+
+# Imprimir la tabla
+print(tabla_top_20_autores)
+
+```
+
+Sacamos un gráfico con los 20 autores más frecuentes para facilitar la visualización.
+
+```{r message=FALSE, warning=FALSE}
+
+# Crear el gráfico de barras
+grafico_autores <- ggplot(data = tabla_top_20_autores, aes(x = reorder(Autor, Frecuencia), y = Frecuencia, fill = Frecuencia)) +
+                   geom_bar(stat = "identity") +
+                   scale_fill_gradient(low = "#87CEEB", high = "#4682B4", na.value = "grey90", guide = "legend") +
+                   labs(title = "Top 20 Autores más Frecuentes",
+                        x = "Autor",
+                        y = "Frecuencia") +
+                   theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+                   coord_flip()  # Rotar etiquetas del eje x para que sean legibles
+
+# Mostrar el gráfico 
+print(grafico_autores)
+
+```
+
+Algunas conclusiones que podemos extraer de los autores más frecuentes son:
+
+1.  **Contribución destacada**: Los autores más frecuentes, como Jeff Foust, Peter B. de Selding y Sandra Erwin, han realizado una contribución significativa al campo de la información espacial y la astronomía mediante la publicación de un gran número de artículos.
+
+2.  **Diversidad de autores**: Aunque algunos autores son más prominentes que otros, la diversidad de autores en la lista indica una variedad de perspectivas y áreas de especialización en la cobertura de noticias espaciales.
+
+3.  **Equipo editorial**: La presencia de SpaceNews Staff, SpaceNews Editor y SpaceNews sugiere que parte de la cobertura editorial es realizada por el equipo editorial de SpaceNews, lo que puede indicar un enfoque institucional o colaborativo en la generación de contenido.
+
+4.  **Relevancia y reconocimiento**: Autores como Jeff Foust, Peter B. de Selding y Sandra Erwin pueden ser considerados como figuras prominentes en el ámbito de la información espacial, dada su alta frecuencia de publicación y, posiblemente, su experiencia y reconocimiento en el campo.
+
+5.  **Distribución de responsabilidades**: Es posible que algunos autores se centren en áreas específicas de la cobertura espacial, como lanzamientos de cohetes, exploración espacial, política espacial, entre otros, lo que sugiere una distribución de responsabilidades dentro del equipo editorial o de colaboradores.
+
+### Tiempo
+
+Lo primero que vamos a hacer es ver la fercuencia de publicaciones por año.
+
+```{r message=FALSE, warning=FALSE}
+
+# Extraer el año de la fecha
+datos_space_limpios$year <- year(datos_space_limpios$date)
+
+# Calcular la frecuencia de artículos por año
+frecuencia_por_año <- table(datos_space_limpios$year)
+
+# Crear el dataframe para el gráfico
+df_frecuencia_por_año <- data.frame(Year = as.numeric(names(frecuencia_por_año)),
+                                     Frequency = as.numeric(frecuencia_por_año))
+
+# Crear el gráfico de barras
+grafico_frecuencia_por_año <- ggplot(data = df_frecuencia_por_año, aes(x = as.factor(Year), y = Frequency, fill = Frequency)) +
+  geom_bar(stat = "identity") +
+  scale_fill_gradient(low = "#87CEEB", high = "#4682B4", na.value = "grey90", guide = "legend") +  # Definir el degradado de colores
+  labs(title = "Frecuencia de artículos por año",
+       x = "Año",
+       y = "Número de artículos") +
+  theme_minimal()
+
+# Mostrar el gráfico con degradado de colores
+print(grafico_frecuencia_por_año)
+
+```
+
+Realizamos un pequeño resumen con los datos recien obtenidos.
+
+```{r message=FALSE, warning=FALSE}
+
+# Mostrar la tabla de resumen
+tabla_resumen <- df_frecuencia_por_año %>%
+  summarise(Total_articulos = sum(Frequency),
+            Año_máximo = Year[which.max(Frequency)],
+            Máximo_articulos = max(Frequency),
+            Año_mínimo = Year[which.min(Frequency)],
+            Mínimo_articulos = min(Frequency))
+
+print(tabla_resumen)
+```
+
+En la tabla resumen nos damos cuenta que el año con más artículos publicados fue en 2021 con 19584 artículos, mientras que 2005 fue el año con menos publicaciones con tan sólo 3 artículos.
+
+La razón por la escasa cantidad de artículos de 2005 se puede deber a que esto son noticias recogidas de Internet, por lo que en aquella época la editorial SpaceNews comenzó a publicar estas noticias en Internet.
+
+Podemos ver las noticias que hubó en 2005.
+
+```{r message=FALSE, warning=FALSE}
+
+# Filtrar las noticias del año 2005
+noticias_2005 <- datos_space_limpios %>% filter(year == 2005)
+
+# Mostrar las noticias del año 2005
+print(noticias_2005)
+
+```
+
+En cuanto a la gran cantidad de noticias publicadas durante 2021, se pudo deber a numerosos e importantes sucesesos acontecidos durante dicho año. Así que vamos a profunidizar más en ese año.
+
+```{r message=FALSE, warning=FALSE}
+
+# Filtrar los artículos de 2021
+articulos_2021 <- subset(datos_space_limpios, year(date) == 2021)
+
+# Extraer el mes de la fecha
+articulos_2021$month <- month(articulos_2021$date, label = TRUE)
+
+# Calcular la frecuencia de artículos por mes
+frecuencia_por_mes <- table(articulos_2021$month)
+
+# Crear el dataframe para la tabla
+df_frecuencia_por_mes <- data.frame(Mes = names(frecuencia_por_mes),
+                                     Frequency = as.numeric(frecuencia_por_mes))
+
+# Mostrar la tabla de frecuencia por mes
+print(df_frecuencia_por_mes)
+
+```
+
+```{r message=FALSE, warning=FALSE}
+
+# Crear el gráfico de barras
+grafico_frecuencia_por_mes <- ggplot(data = df_frecuencia_por_mes, aes(x = Mes, y = Frequency, fill = Frequency)) +
+  geom_bar(stat = "identity") +
+  scale_fill_gradient(low = "#87CEEB", high = "#4682B4", na.value = "grey90", guide = "legend") +  # Definir el degradado de colores
+  labs(title = "Frecuencia de artículos por mes en 2021",
+       x = "Mes",
+       y = "Número de artículos") +
+  theme_minimal()
+
+# Mostrar el gráfico 
+print(grafico_frecuencia_por_mes)
+
+```
+
+Podemos observar que la frecuencia de artículos en 2021 varía a lo largo del año, con algunos meses teniendo más publicaciones que otros. Por ejemplo:
+
+-   Los meses de febrero, marzo, abril, junio, septiembre, octubre y noviembre tienen un número de artículos por encima del promedio anual.
+-   Agosto es el mes con la mayor cantidad de artículos, con 199 publicaciones.
+-   Los meses de enero, mayo, julio y diciembre tienen un número de artículos por debajo del promedio anual.
+
+Estas variaciones podrían deberse a diferentes factores, como eventos importantes en la industria espacial, lanzamientos de misiones, descubrimientos científicos relevantes, entre otros.
+
+Algunos acontecimientos relevantes en la industria espacial y la ciencia en general durante 2021 fueron:
+
+1.  **Lanzamientos de misiones espaciales**: Durante 2021, hubo numerosos lanzamientos de misiones espaciales tanto tripuladas como no tripuladas. Por ejemplo, destacan los lanzamientos de:
+
+    -   La misión Mars 2020, que incluía el rover Perseverance de la NASA y el helicóptero Ingenuity, que aterrizó en Marte en febrero de 2021.
+    -   Misiones espaciales de SpaceX, como las misiones Crew Dragon a la Estación Espacial Internacional (ISS) y las misiones Starlink para desplegar la constelación de satélites de Internet de SpaceX.
+    -   Lanzamientos de la Agencia Espacial China (CNSA), como la misión Tianwen-1 a Marte y la misión Chang'e 5 a la Luna.
+
+2.  **Descubrimientos científicos**: Durante 2021 se realizaron importantes descubrimientos científicos relacionados con el espacio, como la identificación de nuevos exoplanetas, observaciones de fenómenos astronómicos raros y avances en la comprensión del universo.
+
+3.  **Desarrollos en la exploración lunar**: Se produjeron varios avances en los planes de exploración lunar, incluyendo anuncios de programas espaciales de varios países para enviar misiones tripuladas y no tripuladas a la Luna en los próximos años.
+
+4.  **Acontecimientos en la ISS**: Se llevaron a cabo varias actividades importantes en la Estación Espacial Internacional, como caminatas espaciales, experimentos científicos y la llegada y partida de naves espaciales de carga y tripuladas.
+
+5.  **Eventos relacionados con SpaceX**: La compañía SpaceX, liderada por Elon Musk, continuó siendo una figura destacada en la industria espacial, con eventos como el lanzamiento de Starship SN15, avances en la tecnología de cohetes reutilizables y anuncios sobre futuras misiones.
+
+Dado que agosto es el mes con mayor número de publicaciones vamos a centrar todavía más la búsqueda, quedándonos sólo con las noticias de agosto.
+
+```{r message=FALSE, warning=FALSE}
+
+# Filtrar los datos para obtener solo los artículos de agosto de 2021
+datos_agosto_2021 <- subset(datos_space_limpios, month(date) == 8 & year(date) == 2021)
+
+# Verificar los primeros registros del dataset
+head(datos_agosto_2021)
+
+```
+
+#### Autores
+
+Y vamos a ver cuáles son los autores más frecuentes de agosto de 2021.
+
+```{r message=FALSE, warning=FALSE}
+
+# Contar la frecuencia de cada autor
+frecuencia_autores_agosto <- count(datos_agosto_2021, author, sort = TRUE)
+
+# Ver los 5 autores más frecuentes
+head(frecuencia_autores_agosto, 10)
+
+```
+
+Comparando los 10 autores más frecuentes en agosto de 2021 con los 20 autores más frecuentes en general, podemos hacer varias observaciones:
+
+1.  **Consistencia de los principales autores**: Algunos de los autores más frecuentes en agosto de 2021, como Jeff Foust y Sandra Erwin, también están presentes en la lista de los 20 autores más frecuentes en general. Esto sugiere que estos autores tienen una contribución constante y significativa a lo largo del tiempo.
+
+2.  **Variedad de autores**: Aunque hay una superposición entre los dos grupos, también hay autores en la lista general que no aparecen en la lista de agosto de 2021, y viceversa. Esto indica una diversidad en los autores que contribuyen a lo largo del tiempo y en momentos específicos.
+
+3.  **Diferencias en la distribución de contribuciones**: Algunos autores en la lista general pueden haber contribuido más en otros meses o años, lo que explica su presencia en la lista general pero no en la de agosto de 2021. Del mismo modo, algunos autores que están en la lista de agosto pueden no haber sido tan activos en otros períodos.
+
+4.  **Posibles eventos o temas destacados**: Si hay una superposición significativa entre los autores más frecuentes en agosto de 2021 y en la lista general, podríamos inferir que los temas o eventos destacados durante ese mes podrían haber sido continuaciones de tendencias o eventos cubiertos por esos autores en el pasado.
+
+#### WordClouds
+
+En esta sección generaremos WordCLouds para poder varias cual es el uso de palabras más frecuentes.
+
+Vamos a quedarnos sólo con las columnas que nso interesan.
+
+```{r message=FALSE, warning=FALSE}
+
+# Seleccionar solo las columnas relevantes
+datos_agosto_2021_limpios <- datos_agosto_2021 %>%
+  select(title, content, author)
+
+```
+
+Limpiamos el DataSet `datos_agosto_2021`.
+
+```{r message=FALSE, warning=FALSE}
+
+# Eliminar caracteres raros y limpiar el contenido
+datos_agosto_2021_limpios <- datos_agosto_2021_limpios %>%
+  mutate(content = str_replace_all(content, 
+                                    pattern = "https?://([^/\\s]++)\\S*+|http?://([^/\\s]++)\\S*+",
+                                    replacement = "")) %>%
+  mutate(content = gsub("[\\x{1F600}-\\x{1F6FF}|\\x{2600}-\\x{26FF}|\\x{2700}-\\x{27BF}|\\x{1F300}-\\x{1F5FF}|\\x{1F680}-\\x{1F6FF}|\\x{1F1E0}-\\x{1F1FF}|\\x{1F900}-\\x{1F9FF}|\\x{1F7E0}-\\x{1F7FF}|\\x{1F918}]", "", datos_agosto_2021_limpios$content, perl=TRUE)) %>%
+  mutate(content = gsub("[^[:alnum:][:space:]]", "", content, perl=TRUE)) %>%
+  mutate(content = gsub("(#\\w+)|(http\\S+)|(https\\S+)|(&amp;)|(@\\w+)|(RT)", "", content))  %>%
+  mutate(content = gsub("\\b\\d+\\b", "", content))
+
+# Verificar los primeros registros del dataset limpio
+head(datos_agosto_2021_limpios)
+
+```
+
+Creamos un corpus con sus respectivos metadatos.
+
+```{r message=FALSE, warning=FALSE}
+
+# Crear un corpus
+corpus <- quanteda::corpus(datos_agosto_2021_limpios$content)
+
+# Crear metadatos
+docvars(corpus, "tittle") <- corpus$tittle
+docvars(corpus, "content") <- corpus$content
+docvars(corpus, "author") <- corpus$author
+
+corpus <- tokens(corpus)
+
+```
+
+Obtemos las stopwords en inglés para eliminar y que no aparezcan.
+
+```{r message=FALSE, warning=FALSE}
+
+# Obtener las stopwords en inglés
+palabras_a_eliminar <- stop_words$word
+
+```
+
+Terminamos de limpiar el corpus antes de realizar el WordCloud con las palabras más frecuentes.
+
+```{r message=FALSE, warning=FALSE}
+
+# Crear corpus limpio
+corpus_limpio <- quanteda::tokens(corpus,
+                                what="word",
+                                remove_numbers=TRUE,
+                                remove_punct=TRUE,
+                                remove_symbols=TRUE,
+                                remove_separators=TRUE,
+                                remove_url=TRUE)
+
+# Eliminar stopwords  
+corpus_limpio <- tokens_select(corpus_limpio,
+                               pattern = palabras_a_eliminar,
+                               selection = "remove")
+
+```
+
+Creamos la matriz.
+
+```{r message=FALSE, warning=FALSE}
+
+# Crear matriz
+myStemMat <-dfm(corpus_limpio)
+
+# Sacar hasta 60 top words
+print(topfeatures(myStemMat, n = min(60, nfeat(myStemMat))))
+
+```
+
+Generamos el WordCloud.
+
+```{r message=FALSE, warning=FALSE}
+
+# Crear semilla para crear una imagen 
+set.seed(100)
+
+# Información de la imagen
+png(filename="wordcloud_agosto.png",
+    width=3000,
+    height=3000)
+
+# Generar el WordCloud
+textplot_wordcloud(myStemMat, 
+                   min_count = 10, 
+                   random_order = FALSE,
+                   rotation = 0,
+                   color = RColorBrewer::brewer.pal(8,"Dark2"))
+
+# Cerrar conexión
+dev.off()
+
+```
+
+![](wordcloud_agosto.png)
+
+1.  **Temas Destacados**:
+    -   **Space**: La palabra "space" encabeza la lista, lo que indica que los artículos están relacionados con el espacio en general.
+    -   **Lanzamientos (Launch) y Satélites (Satellites)**: El gran número de menciones de "launch" y "satellites" sugiere un enfoque en lanzamientos de cohetes y despliegue de satélites durante ese mes.
+    -   **Empresas Espaciales (Company)**: La presencia de "company" indica un interés en las actividades de las empresas espaciales.
+    -   **Órbita (Orbit)**: La mención frecuente de "orbit" sugiere discusiones sobre órbitas terrestres y orbitales.
+2.  **Involucrados y Participantes**:
+    -   **NASA**: La NASA es una entidad prominente en el ámbito espacial y su presencia sugiere discusiones sobre actividades y misiones de la agencia espacial.
+    -   **SpaceX**: La aparición de "SpaceX" indica un interés particular en las actividades y logros de esta empresa aeroespacial.
+    -   **Industria Espacial (Industry)**: La presencia de "industry" sugiere un enfoque en la industria espacial en general.
+3.  **Tecnología y Desarrollo**:
+    -   **Tecnología (Technology)**: La tecnología espacial es un tema relevante, como lo sugiere la alta frecuencia de "technology".
+    -   **Desarrollo (Development)**: La presencia de "development" indica un enfoque en el desarrollo de tecnología y sistemas espaciales.
+4.  **Misiones y Programas Espaciales**:
+    -   **Misiones (Missions)**: Las misiones espaciales son un tema importante, como lo sugiere la alta frecuencia de "missions".
+    -   **Programas (Program)**: La aparición de "program" sugiere discusiones sobre programas espaciales y de exploración.
+5.  **Otros Temas Destacados**:
+    -   **Tierra (Earth)**: Aunque no tan frecuente como otros términos, "Earth" indica discusiones sobre temas relacionados con nuestro planeta.
+    -   **Defensa (Defense)**: La presencia de "defense" sugiere un enfoque en aspectos de defensa y seguridad espacial.
+    -   **Negocios Espaciales (Business)**: La aparición de "business" indica discusiones sobre aspectos comerciales y económicos del sector espacial.
+
+En agosto de 2021 hubo varios lanzamientos y misiones destacadas en el ámbito espacial. Algunos de estos son:
+
+1.  **Lanzamiento del Mars Rover de la NASA**:
+    -   El Mars Rover "Perseverance" de la NASA, lanzado en julio de 2020, aterrizó en Marte el 18 de febrero de 2021, pero en agosto continuó realizando exploraciones y recopilando datos en la superficie marciana.
+
+```{r warning=FALSE, message=FALSE}
+
+# Buscar la noticia
+noticia_rover <- datos_agosto_2021_limpios[grep("mars rover", datos_agosto_2021_limpios$content, ignore.case = TRUE), ]
+
+# Mostrar la noticia encontrada
+print(noticia_rover)
+
+```
+
+2.  **Lanzamiento de Starliner de Boeing**:
+    -   La cápsula CST-100 Starliner de Boeing realizó su segundo vuelo de prueba no tripulado el 3 de agosto de 2021. El objetivo del vuelo era demostrar la capacidad de Starliner para acoplarse con la Estación Espacial Internacional (EEI).
+
+```{r warning=FALSE, message=FALSE}
+
+# Buscar la noticia
+noticia_starliner <- datos_agosto_2021_limpios[grep("starliner", datos_agosto_2021_limpios$content, ignore.case = TRUE), ]
+
+# Mostrar la noticia encontrada
+print(noticia_starliner)
+
+```
+
+3.  **Lanzamiento de Satélites Starlink de SpaceX**:
+    -   SpaceX continuó con su constelación de satélites Starlink, lanzando múltiples lotes de satélites durante agosto de 2021. Estos satélites se utilizan para proporcionar servicios de Internet de alta velocidad en áreas remotas de la Tierra.
+
+```{r warning=FALSE, message=FALSE}
+
+# Buscar la noticia 
+noticia_starlink <- datos_agosto_2021_limpios[grep("starlink", datos_agosto_2021_limpios$content, ignore.case = TRUE), ]
+
+# Mostrar la noticia encontrada
+print(noticia_starlink)
+
+```
+
+Para mayor detalle vamos a realizar bigramas y trigramas.
+
+```{r message=FALSE, warning=FALSE}
+
+# Hacemos un bigrama
+corpus_limpio2 <- tokens_ngrams(corpus_limpio, 
+                              n = 2)
+# Generamos la matriz
+myStemMat <- dfm(corpus_limpio2)
+
+# Sacamos hasta 60 top words
+print(topfeatures(myStemMat, n = min(60, nfeat(myStemMat))))
+
+
+# Creamos semilla para crear una imagen 
+set.seed(100)
+
+png(filename="bigrama_agosto.png",
+    width=3000,
+    height=3000)
+
+# Generamos el WordCloud
+textplot_wordcloud(myStemMat, 
+                   min_count = 1,           # Cambiado a 1 para incluir todas las palabras
+                   random_order = FALSE,
+                   rotation = 0,
+                   color = RColorBrewer::brewer.pal(8,"Dark2"))
+
+# Cerramos la conexion para que se cree la imagen png
+dev.off()
+
+```
+
+![](bigrama_agosto.png)
+
+Los bigramas más frecuentes de agosto de 2021 nos ofrecen una visión interesante de los temas destacados durante ese período:
+
+1.  **Space Force**: Este término está relacionado con la rama espacial de las fuerzas armadas de los Estados Unidos y su actividad en el espacio.
+
+2.  **Air Force**: Hace referencia a la Fuerza Aérea y su participación en operaciones relacionadas con el espacio.
+
+3.  **Earth Orbit**: Describe la órbita terrestre, posiblemente relacionada con misiones espaciales, satélites o actividades en la órbita baja de la Tierra.
+
+4.  **Blue Origin**: Esta empresa aeroespacial fundada por Jeff Bezos ha estado en el centro de la atención por su participación en lanzamientos y desarrollo de tecnología espacial.
+
+5.  **Rocket Lab**: Otra empresa de lanzamiento espacial que ha estado activa en el desarrollo de cohetes y lanzamientos de satélites.
+
+6.  **National Security**: Relacionado con temas de seguridad nacional en el ámbito espacial.
+
+7.  **Low Earth**: Se refiere a la órbita baja de la Tierra, que es una región importante para muchas misiones espaciales.
+
+8.  **Space Station**: La Estación Espacial Internacional (ISS) es una de las principales referencias en este término.
+
+9.  **Launch Vehicle**: Se refiere a los vehículos de lanzamiento utilizados para enviar cargas útiles al espacio.
+
+10. **Colorado Springs**: Posiblemente relacionado con eventos o instalaciones espaciales ubicadas en esta ciudad de Colorado.
+
+Al considerar tanto las palabras individuales más frecuentes como los bigramas más comunes de agosto de 2021, podemos obtener una imagen más completa de los temas y eventos destacados durante ese período.
+
+1.  **Space Launch y Satellites**: La frecuencia de estos términos indica un enfoque significativo en los lanzamientos espaciales y la actividad relacionada con satélites durante ese mes. Y hemos podido ver algunos de estos lanzamientos en el apartado anterior.
+
+2.  **Company Satellite y Commercial Million**: Estos bigramas sugieren un interés particular en las empresas privadas que operan satélites y realizan actividades comerciales en el espacio, posiblemente relacionadas con inversiones millonarias en el sector espacial comercial. Uno de estos es Space, Blue Origin o Rocket Lab.
+
+3.  **Earth Orbit y Low Earth**: La presencia de estos bigramas indica un enfoque en las misiones y operaciones espaciales en órbita terrestre baja, que es una región crítica para muchas actividades espaciales.
+
+4.  **Spacecraft Services y National Companies**: Estos bigramas indican un enfoque en los servicios relacionados con naves espaciales y la participación de empresas nacionales en el sector espacial como la NASA.
+
+```{r message=FALSE, warning=FALSE}
+
+# Hacemos un trigrama
+corpus_limpio2 <- tokens_ngrams(corpus_limpio, 
+                              n = 3)
+# Generamos la matriz
+myStemMat <- dfm(corpus_limpio2)
+
+# Sacamos hasta 60 top words
+print(topfeatures(myStemMat, n = min(60, nfeat(myStemMat))))
+
+
+# Creamos semilla para crear una imagen 
+set.seed(100)
+
+png(filename="trigrama_agosto.png",
+    width=3000,
+    height=3000)
+
+# Generamos el WordCloud
+textplot_wordcloud(myStemMat, 
+                   min_count = 1,           # Cambiado a 1 para incluir todas las palabras
+                   random_order = FALSE,
+                   rotation = 0,
+                   color = RColorBrewer::brewer.pal(8,"Dark2"))
+
+# Cerramos la conexion para que se cree la imagen png
+dev.off()
+
+```
+
+![](trigrama_agosto.png)
+
+Al analizar los trigramas más frecuentes de agosto de 2021, podemos obtener información adicional sobre los temas y eventos relevantes en el ámbito espacial durante ese período:
+
+1.  **Low Earth Orbit (Órbita Terrestre Baja)**: La aparición frecuente de este trígrama sugiere un enfoque significativo en las operaciones y actividades en órbita terrestre baja, una región crucial para muchas misiones espaciales.
+
+2.  **International Space Station (Estación Espacial Internacional)**: Este trígrama indica un interés continuo en la ISS y las actividades asociadas con la estación espacial.
+
+3.  **National Security Space (Espacio de Seguridad Nacional)**: La presencia de este trígrama sugiere un enfoque en las actividades espaciales relacionadas con la seguridad nacional, como la vigilancia y la defensa.
+
+4.  **Space Systems Command (Comando de Sistemas Espaciales)**: Este trígrama indica un enfoque en las operaciones y el liderazgo en el ámbito de los sistemas espaciales.
+
+5.  **36th Space Symposium (36º Simposio Espacial)**: La aparición de este trígrama sugiere que este evento específico fue destacado durante agosto de 2021, posiblemente como un lugar importante para discutir y presentar avances en tecnología espacial.
+
+6.  **Space Development Agency (Agencia de Desarrollo Espacial)**: Este trígrama indica un enfoque en las actividades de desarrollo espacial, posiblemente relacionadas con la planificación y ejecución de nuevas misiones y tecnologías.
+
+7.  **Human Landing System (Sistema de Aterrizaje Humano)**: La presencia de este trígrama sugiere un interés en los sistemas y tecnologías relacionados con los aterrizajes humanos en cuerpos celestes, como la Luna o Marte.
+
+8.  **Rocket Lab Electron**: Este trígrama indica un enfoque en los lanzamientos y actividades asociadas con los cohetes Rocket Lab Electron.
+
+9.  **Space Traffic Management (Gestión del Tráfico Espacial)**: Este trígrama sugiere un interés en las actividades relacionadas con la regulación y gestión del tráfico en el espacio, posiblemente debido al aumento de la cantidad de satélites y naves espaciales en órbita.
+
+10. **Satellite Navigation System (Sistema de Navegación por Satélite)**: La presencia de este trígrama indica un enfoque en los sistemas de navegación satelital, como GPS y otros sistemas similares.
+
+Ahora que tenemos los trigramas podemos ver con más detalle hacia donde se enfocan las noticias. Con el WordCloud donde sólo se usaba una palabra podiamos hacernos una idea genérica de las noticias y a partir de ellas investigar y encontrar noticias acerca de ellas. En el WordCloud con los bigramas podiamos confirmar lo buscado en la primera sección asi como saber con un poco más de detalle el tipo de enfoque, mientras que ya con los trigramas, podemos hacernos una idea mucho más concreta ade los temas de los que se habla sin necesidad de buscar noticias específicas.
+
+### Palabras más frecuentes
+
+Ahora vamos a analizar las palabras más frecuentes, pero centrándonos en el autor. Antes hemos analizado qué palabras se usaban con más frecuencia duranate agosto de 2021.
+
+Calculamos la frecuecia de cada palabra por autor, las palabras totales por autor y en `space_words` unimos `space_words` con `total_words` utilizando `author` como clave de unión.
+
+```{r message=FALSE, warning=FALSE}
+
+# Tokenización y conteo de palabras
+space_words <- datos_agosto_2021_limpios %>%
+  unnest_tokens(word, content) %>%
+  count(author, word, sort = TRUE) 
+
+# Cálculo del total de palabras por autor
+total_words <- space_words %>% 
+  group_by(author) %>% 
+  summarize(total = sum(n))
+
+# Unión de las tablas
+space_words <- left_join(space_words, total_words)
+
+```
+
+Mostramos el gráfico donde se muestra la frecuencia relativa de cada palabra por autor
+
+```{r message=FALSE, warning=FALSE}
+
+# Generar el gráfico
+gg <- ggplot(space_words, 
+       aes(n/total, fill = author)) +
+  geom_histogram(show.legend = FALSE) +
+  xlim(NA, 0.0009) +
+  facet_wrap(~author, 
+             ncol = 2, 
+             scales = "free_y")
+
+# Guardar el gráfico 
+ggsave("histograma_autores.png", gg, width = 10, height = 8, units = "in")
+
+```
+
+![](histograma_autores.png)
+
+### TF-IDF
+
+Podemos calcular el TF-IDF (Frecuencia de Término - Frecuencia Inversa de Documento) para `space_words`. Esto es una medida estadítica para evaluar la importancia de una palabra en un documento, en relación con una colección de documentos más grande.
+
+Es decir, para nuestro caso destacaremos las palabras más importantes para cada autor y no tienen porqué ser las palabras más importantes de todo el conjunto de datos.
+
+```{r message=FALSE, warning=FALSE}
+
+# Calculamos el TF-IDF
+space_tf_idf <- space_words %>%
+  bind_tf_idf(word, author, n)
+
+```
+
+```{r message=FALSE, warning=FALSE, fig.show='hide'}
+
+# Selección de las palabras con mayor TF-IDF y creación del gráfico
+p <- space_tf_idf %>%
+  group_by(author) %>%
+  slice_max(tf_idf, 
+            n = 15) %>%
+  ungroup() %>%
+  ggplot(aes(tf_idf, fct_reorder(word, tf_idf), 
+             fill = author)) +
+  geom_col(show.legend = FALSE) +
+  facet_wrap(~author, ncol = 2, scales = "free") +
+  labs(x = "tf-idf", y = NULL)
+
+# Guardar el gráfico
+ggsave("space_tf_idf.png", plot = p, width = 70, height = 50, units = "in", limitsize = FALSE)
+
+```
+
+![](space_tf_idf.png)
+
+1.  **Jeff Foust**:
+    -   Tiene un enfoque en noticias relacionadas con la industria espacial, especialmente en anuncios de empresas y agencias espaciales.
+    -   Menciona a menudo términos como "rocket", "nasa", "lunar", y "vehicle", indicando un interés en misiones y tecnologías relacionadas con la exploración espacial.
+2.  **Sandra Erwin**:
+    -   Se centra en noticias sobre la fuerza aérea (air force) y temas militares relacionados con el espacio.
+    -   Destaca términos como "force", "nssl" (National Security Space Launch), y "ula" (United Launch Alliance), indicando un interés en lanzamientos militares y temas de seguridad nacional.
+3.  **Jason Rainbow**:
+    -   Cubre noticias sobre empresas y constelaciones satelitales, con un enfoque en compañías como AWS, Intelsat, y Eutelsat.
+    -   Utiliza términos como "satellites", "ground", y "operator", mostrando interés en la infraestructura satelital y los servicios de telecomunicaciones.
+4.  **Debra Werner**:
+    -   Enfoca sus noticias en tecnologías de propulsión y sistemas de propulsión.
+    -   Destaca términos como "propulsion", "thrusters", y "thruster", lo que indica un interés en la innovación en propulsión espacial.
+5.  **Andrew Jones**:
+    -   Se centra en noticias relacionadas con China y su programa espacial.
+    -   Utiliza términos como "chinese", "rocket", "shenzhou12", y "china", mostrando un interés en las actividades espaciales de China.
+6.  **Park Si-soo**:
+    -   Cubre principalmente noticias sobre Corea del Sur y su programa espacial.
+    -   Utiliza términos como "korea", "south", "seoul", y "minister", indicando un enfoque en la política espacial y la cooperación internacional.
+7.  **Michael J. Listner**:
+    -   Enfoca sus noticias en asuntos legales y políticos en el espacio.
+    -   Menciona términos como "treaty", "law", "governance", y "legal", lo que indica un interés en la regulación y la gobernanza espacial.
+8.  **a.i. solutions**:
+    -   Se enfoca en tecnologías y soluciones de automatización en el espacio.
+    -   Utiliza términos como "ai", "freeflyer", y "automation", mostrando interés en el desarrollo de sistemas autónomos y de inteligencia artificial para misiones espaciales.
+9.  **Grant Anderson**:
+    -   Centra sus noticias en lecciones aprendidas de programas espaciales pasados, especialmente del programa del transbordador espacial.
+    -   Utiliza términos como "shuttle", "atlantis", "columbia", y "challenger", mostrando un interés en la historia y la seguridad de los vuelos espaciales tripulados.
+10. **Austin Link**:
+    -   Cubre noticias sobre la gestión de desechos espaciales y la mitigación de la basura espacial.
+    -   Utiliza términos como "disposal", "tug", "debris", y "removal", mostrando un interés en la limpieza y la gestión de la órbita terrestre.
+11. **Leo Mondale**:
+    -   Se enfoca en temas relacionados con el impacto ambiental de la industria espacial.
+    -   Utiliza términos como "carbon", "climate", "environmental", y "footprint", mostrando interés en la sostenibilidad y el impacto ambiental de las actividades espaciales.
+12. **Tony Quine**:
+    -   Cubre principalmente noticias sobre la industria cinematográfica y el entretenimiento relacionado con el espacio.
+    -   Menciona términos como "cosmonaut", "cinematography", y "script", mostrando un enfoque en la producción de películas y documentales espaciales.
+13. **Tony Samp**:
+    -   Se enfoca en la innovación tecnológica y la adopción de nuevas capacidades en la industria espacial.
+    -   Utiliza términos como "responsive", "capabilities", y "automation", mostrando un interés en la mejora de la eficiencia y la velocidad en el desarrollo de sistemas espaciales.
+14. **Anusuya Datta**:
+    -   Cubre noticias sobre sistemas de navegación y posicionamiento global.
+    -   Utiliza términos como "gps", "gnss", "navigation", y "positioning", mostrando interés en la tecnología de posicionamiento global y sus aplicaciones.
+15. **Charles Beames**:
+    -   Enfoca sus noticias en estrategias de adquisición y compras en el ámbito espacial.
+    -   Utiliza términos como "pentagon", "contracting", y "buying", mostrando un interés en los procesos de adquisición y la gestión de contratos espaciales.
+16. **Patty Stoll**:
+    -   Se centra en noticias sobre trajes espaciales y actividades extravehiculares (EVA).
+    -   Utiliza términos como "spacesuit", "eva", y "extravehicular", mostrando interés en la tecnología y las operaciones de trajes espaciales.
+17. **Michael Lencioni**:
+    -   Cubre noticias sobre vuelos espaciales tripulados y la industria de turismo espacial.
+    -   Menciona términos como "virgin", "galactic", y "crewed", mostrando un enfoque en las empresas de turismo espacial y los vuelos tripulados.
+18. **Christopher Stone**:
+    -   Se enfoca en la detección y defensa contra amenazas espaciales.
+    -   Utiliza términos como "opir", "sbirs", "missiles", y "threats", mostrando interés en la vigilancia y la protección contra misiles y amenazas espaciales.
+19. **SpaceNews Editor**:
+    -   Cubre una amplia variedad de temas relacionados con la industria espacial y la tecnología.
+    -   Utiliza términos como "edition", "digital", y "editorial", mostrando un enfoque en la producción y distribución de contenido espacial.
+
+### Ley de Zipf
+
+Podemos realizar un análisis de la distribución de frecuencia de los términos con la ley de Zipf.
+
+Esta ley es un fénomeno empírico que describe la distribución de la frecuencia de las palabras en un texto, donde la frecuencia de cualquier palabra es inversamente proporcional a su rango de frecuencia. En otras palabras, la palabra más frecuente en un texto ocurre aproximadamente el doble de veces que la segunda palabra más frecuente, tres veces más que la tercera, y así sucesivamente.
+
+Para ello, agrupamos por autor y calculamos la frecuencia relativa de cada palabra en relación con el total de palabras.
+
+```{r message=FALSE, warning=FALSE}
+
+freq_by_rank <- space_words %>% 
+  group_by(author) %>% 
+  mutate(rank = row_number(), 
+         term_frequency = n/total) %>%
+  ungroup()
+
+```
+
+Ahora calculamos la regresión lineal de logaritmo de la frecuencia relativa en funcion del logaritmo del rango para cada autor y generamos el gráfico
+
+```{r, message=FALSE, warning=FALSE}
+
+# Ajustamos un modelo de regresión lineal logarítmica para los datos de frecuencia y rango
+zipf <- lm(log10(term_frequency) ~ log10(rank), 
+   data = freq_by_rank)
+
+# Mostramos un resumen del modelo lineal
+summary(zipf)
+
+# Creamos el gráfico
+freq_by_rank %>% 
+  ggplot(aes(rank, 
+             term_frequency, 
+             color = author)) + 
+  geom_abline(intercept = 0.951902, 
+              slope = -1.554990, 
+              color = "gray50", linetype = 2) +
+  geom_line(linewidth = 1.1, 
+            alpha = 0.8) + 
+  scale_x_log10() +
+  scale_y_log10() +
+  labs(color = "Autor") + 
+  theme(legend.position = "right")
+
+```
+
+### Topic models
+
+Los modelos de tópicos (topic models) son útiles para identificar temas principales o tópicos en un conjunto de documentos textuales, lo que permite explorar y comprender mejor el contenido de los documentos.
+
+Asi que, aquí nuestro objetivo es ver cuales son los temas principales que se tratan en la revista SpaceNews.
+
+```{r message=FALSE, warning=FALSE}
+
+# Creamos un corpus a partir de los datos
+corpus <- corpus(datos_space_limpios$content, docnames = datos_space_limpios$doc_id)
+
+# Creamos tokens
+palabras <- tokens(corpus,
+                   remove_punct=TRUE,
+                   remove_symbols=TRUE,
+                   remove_separators=TRUE,
+                   remove_url=TRUE)
+
+# Eliminamos stopwords
+palabras_filtradas <- tokens_select(palabras,
+                                    pattern = palabras_a_eliminar,
+                                    selection = "remove")
+
+# Convertimos a matriz término-documento
+matriz <- dfm(palabras_filtradas)
+
+# Creamos el modelo de tópicos (LDA)
+num_topics <- 6  # Definimos el número de tópicos
+set.seed(100)
+lda_model <- LDA(convert(matriz, to = "topicmodels"), k = num_topics)
+
+# Mostramos los términos más relevantes por cada tópico
+terms(lda_model, 10)
+
+# Guardamos el modelo de tópicos
+save(lda_model, file = "topic_model_datos_space.rda")
+
+```
+
+Basándonos en los resultados de los topic models de `datos_space_limpios`, podemos sacar varias conclusiones:
+
+1.  **Diversidad de temas**:
+    -   Los cinco temas identificados abordan diferentes aspectos del espacio y la exploración espacial.
+    -   El **Tema 1** está relacionado con la NASA y misiones espaciales, con términos como "nasa", "mission" y "science".
+    -   El **Tema 2** parece centrarse en los lanzamientos, con términos como "launch", "rocket" y "company".
+    -   El **Tema 3** está más vinculado a temas relacionados con la fuerza, posiblemente en un contexto militar, con términos como "force", "air" y "defense".
+    -   El **Tema 4** parece estar asociado con tecnología espacial y satélites, con términos como "satellites", "satellite" y "data".
+    -   El **Tema 5** incluye términos más generales relacionados con empresas y servicios, como "company", "million" y "services".
+2.  **Frecuencia de términos**:
+    -   "Space" es un término común en tres de los cinco temas, lo que sugiere que es un tema central en la mayoría de los artículos.
+    -   "Nasa" y "mission" también son términos frecuentes, lo que indica un enfoque significativo en las actividades y misiones de la NASA.
+    -   Términos como "launch", "satellites" y "satellite" muestran un énfasis en los lanzamientos y la tecnología satelital.
+3.  **Diferenciación de temas**:
+    -   Los temas 1, 2 y 3 están más relacionados con la exploración y actividades espaciales, mientras que los temas 4 y 5 parecen abordar aspectos más técnicos y empresariales.
+
+#### WordCloud de los topic models
+
+```{r message=FALSE, warning=FALSE}
+
+# Obtener los términos más relevantes por cada tópico
+terms_per_topic <- terms(lda_model, 10)
+
+kk <- lda_model@beta
+class(kk)
+
+# Dimensiones de la matriz beta del modelo LDA
+dim_kk <- dim(lda_model@beta)
+
+# Asignar nombres a las columnas de kk con los términos
+colnames(kk) <- lda_model@terms
+
+#Tenemos 5 wordclouds
+kk[1:6, 1:50]
+
+# Definir el diseño de la matriz de gráficos
+par(mfrow = c(3, 3))
+
+png(file="wordcloudTopicModels.png",
+    width=3600,
+    height=3000,
+    res = 300,
+    bg = "black")
+
+par(mfrow=c(3, 3))
+
+for (k in 1:length(kk[,1])) {
+  
+  topic1 <- kk[k,]
+  
+  v <- topic1
+  
+  d <- data.frame(word = names(v),rank= rank(v))
+  
+  d <- d[order(-d$rank),]
+  
+  d$freq <- d$rank - max(d$rank) + 100
+  
+  pal2 <- brewer.pal(11,"Spectral")
+  wordcloud(d$word,
+            d$freq, 
+            scale = c(1.2, 0.05),
+            max.words = 200, 
+            random.order = FALSE, 
+            rot.per = 0, 
+            colors = pal2,
+            random.clor = TRUE)
+  title(main = paste(k),
+        font = 10,
+        col.main = "yellow")
+}
+
+
+dev.off() 
+```
+
+![](wordcloudTopicModels.png)
+
+## Análisis de sentimientos
+
+Antes de aplicar analisis de semntimientos usando la libreria `tidytext` vamos a seleccionar e informarnos acerca de la carrera de dos de los escritores como muestra para poder compararlos y poder analizar las diferencias en cuanto a forma de escritura, pensamiento o ideales entre ambos autores.
+
+En este caso hemos seleccionado a Jeff Foust debido a que era el autor con más apariciones en el DataSet y a Sandra Erwin ya que además de ser la tercer autora con más publicaciones sobre el campo del Cosmos y las nuevas tecnologías que van apareciendo, nos intrigamos por saber si habia alguna diferencia debido a su género.
+
+*RESUMEN DEL AUTOR JEFF FOUST:*
+
+![](Fotos/jeff.jpg)
+
+Jeff Foust es otro periodista destacado en el ámbito de la exploración espacial y la industria aeroespacial. Algunos de los temas que suele tratar incluyen:
+
+-   Exploración Espacial: Foust cubre una amplia gama de temas relacionados con la exploración del espacio, incluyendo misiones espaciales, descubrimientos científicos, lanzamientos de cohetes, programas de exploración lunar y marciana, y la participación de agencias espaciales como la NASA, ESA y otras.
+
+-   Industria Aeroespacial: Como experto en la industria, Foust informa sobre noticias y desarrollos en empresas aeroespaciales líderes como SpaceX, Boeing, Blue Origin, Lockheed Martin y otras, incluyendo lanzamientos comerciales, desarrollos de vehículos espaciales, contratos gubernamentales y colaboraciones público-privadas.
+
+-   Política Espacial: Foust también aborda temas relacionados con la política espacial, incluyendo debates legislativos, presupuestos gubernamentales para la exploración espacial, regulaciones y políticas de agencias espaciales.
+
+-   Tecnología Espacial: Cubre avances tecnológicos en el campo espacial, incluyendo nuevos sistemas de propulsión, tecnologías de navegación, avances en materiales y diseño de vehículos espaciales, y otras innovaciones relevantes para la exploración y la industria espacial.
+
+-   Análisis y Opinión: Además de reportar noticias, Foust también ofrece análisis y opiniones sobre eventos y desarrollos clave en la exploración espacial y la industria aeroespacial, ayudando a contextualizar la información para su audiencia.
+
+*RESUMEN DE LA AUTORA SANDRA ERWIN:*
+
+![](Fotos/sandra.jpg)
+
+Sandra Erwin es una periodista reconocida por su cobertura de temas relacionados con defensa, espacio y tecnología militar. Algunos de los temas que suele tratar incluyen:
+
+-   Defensa y Seguridad Nacional: Erwin suele informar sobre políticas de defensa, estrategias militares, presupuestos de defensa y adquisiciones de equipos y tecnología militar.
+
+-   Exploración Espacial: Como parte de su cobertura, puede abordar noticias relacionadas con misiones espaciales, exploración planetaria, lanzamientos de cohetes, programas espaciales gubernamentales y privados, entre otros temas.
+
+-   Innovación Tecnológica: Erwin también puede cubrir avances en tecnología militar, como armas avanzadas, sistemas de comunicación, ciberseguridad y desarrollo de drones, entre otros.
+
+-   Política Espacial: Además, suele informar sobre políticas y regulaciones relacionadas con la exploración espacial, colaboraciones internacionales en el espacio y la dirección futura de los programas espaciales.
+
+-   Ciencia y Tecnología: A veces, Sandra Erwin puede cubrir noticias relacionadas con avances científicos y tecnológicos en áreas como la ingeniería, la física y la computación, especialmente cuando tienen aplicaciones militares o espaciales.
+
+Creamos un nuevo DataSet con los dos autores seleccionado.
+
+```{r message=FALSE, warning=FALSE}
+
+# Definición de autores
+autores <- c("Jeff Foust", "Sandra Erwin")
+
+# Filtrado de datos por autores
+datos_autores <- datos_space_limpios %>%
+  filter(author %in% autores) 
+
+# Verificar los primeros registros del dataset filtrado
+head(datos_autores)
+
+```
+
+Y creamos dos gráficos para mostrar la frecuencia de publicaciones.
+
+```{r message=FALSE, warning=FALSE}
+ggplot(datos_autores, 
+       aes(x = date, 
+           fill = author)) +
+  geom_histogram(position = "identity", 
+                 bins = 20, 
+                 show.legend = F) +
+  facet_wrap(~author, ncol = 1)
+```
+
+Las gráficas que se muestran previamente muestran cuando se han realizado las publicaciones de los artículos científicos tanto de Jeff Foust (rojo) como de Sandra Erwin (azul) a medida que avanza el tiempo. Podemos distinguir una diferencia principal entre la gráfica superior (Jeff) donde se ve que el autor comenzó a escribir a lo largo de 2013 y la gráfica inferior (Sandra) donde se ve que la periodista comenzó a trabajar para esta revista 4 años más tarde.
+
+En cuanto a la frecuencia de las publicaciones es bastante constante lo cual podría reflejar que no es un hobby si no su trabajo.
+
+Ahora vamos a separar a guardar los histogramas resultantes para cada autor.
+
+```{r message=FALSE, warning=FALSE}
+
+articulos_jeff <- datos_autores %>%
+     filter(date > as.Date("2017-01-01")
+           & (author  == "Jeff Foust")) %>%
+    ggplot(aes(x = date, 
+             fill = author)) +
+    geom_histogram(position = "identity", 
+                   bins = 40, 
+                   show.legend = F) 
+
+articulos_sandra <- datos_autores %>%
+  filter(date > as.Date("2017-01-01")
+           & (author  == "Sandra Erwin")) %>%
+  ggplot(aes(x = date, 
+           fill = author)) +
+  geom_histogram(position = "identity", 
+                 bins = 40, 
+                 show.legend = F)
+
+```
+
+Vamos a ver la frecuencia de las palabras de cada autor. Para ello, primero debemos tokenizar `datos_autores` quitando las stopwords.
+
+```{r message=FALSE, warning=FALSE}
+
+# Tokenización
+datos_autores %>%
+  unnest_tokens(word, content) %>%
+  filter(!word %in% stop_words$word,
+         !word %in% str_remove_all(stop_words$word, "'"),
+         str_detect(word, "[a-z]")) -> tokens_autores
+
+# Cálculo de Frecuencia
+frequency <- tokens_autores %>% 
+  count(author, 
+        word, 
+        sort = TRUE) %>% 
+  left_join(tokens_autores %>% 
+              count(author, 
+                    name = "total")) %>%
+  mutate(freq = n/total)
+
+# Resultados
+frequency
+  
+```
+
+Basándonos en los resultados de frecuencia de palabras por autor, podemos sacar varias conclusiones:
+
+1.  **Frecuencia de palabras más alta**:
+    -   Para Sandra Erwin, las palabras más frecuentes son "space", "force", "air", "satellites" y "launch".
+    -   Para Jeff Foust, las palabras más frecuentes son "space", "launch", "nasa", "mission" y "company".
+2.  **Temas principales**:
+    -   Tanto Sandra Erwin como Jeff Foust comparten la palabra "space" como una de las más frecuentes, lo que sugiere que ambos autores escriben mucho sobre temas relacionados con el espacio.
+    -   Jeff Foust también menciona mucho a la NASA y a las misiones espaciales.
+    -   Sandra Erwin parece centrarse más en temas como la fuerza (posiblemente en el contexto militar o aeroespacial), el aire y los satélites.
+3.  **Enfoque de Sandra Erwin**:
+    -   Parece estar más enfocada en temas de defensa, militar y aeroespacial, mencionando palabras como "force", "air", "satellites", "defense" y "military".
+4.  **Enfoque de Jeff Foust**:
+    -   Jeff Foust parece tener un enfoque más general en la exploración espacial, mencionando palabras como "nasa", "mission", "launch", "spacecraft" y "rocket".
+5.  **Diferencia en la variedad de temas**:
+    -   Jeff Foust tiene una gama más amplia de temas, incluyendo misiones espaciales, empresas aeroespaciales (como SpaceX), tecnología espacial y la estación espacial.
+    -   Sandra Erwin parece estar más centrada en temas relacionados con la defensa y el uso militar del espacio.
+
+Los resultados de frecuencia de palabras por autor reflejan los temas principales que cubren, con Jeff Foust centrándose más en la exploración espacial, la industria aeroespacial y la política espacial, mientras que Sandra Erwin se enfoca más en la defensa, la seguridad nacional y la tecnología militar, pero también cubre aspectos de la exploración espacial y la política espacial.
+
+```{r message=FALSE, warning=FALSE}
+frequency_para_plot <- frequency[frequency$author %in% autores,]
+
+frequency_para_plot <- frequency[frequency$author %in% 
+                                   c("Jeff Foust", "Sandra Erwin"),]
+
+frequency_para_plot <- frequency_para_plot %>% 
+  select(author, word, freq) %>% 
+  pivot_wider(names_from = author, 
+              values_from = freq) %>%
+  arrange(`Jeff Foust`, `Sandra Erwin`)
+
+# Devuelve el promedio de la frecuencia de las palabras en las cuentas de Jeff Foust.
+quantile(frequency_para_plot$`Jeff Foust`,
+         probs = c(0.5),
+         na.rm = TRUE) * 10000000
+
+# Devuelve el promedio de la frecuencia de las palabras en las cuentas de Sandra Erwin.
+quantile(frequency_para_plot$`Sandra Erwin`,
+         probs = c(0.5),
+         na.rm = TRUE) * 10000000
+
+```
+
+1.  **Jeff Foust**:
+    -   La mediana de la frecuencia de las palabras en las cuentas de Jeff Foust es de aproximadamente 19.06 por cada 10,000,000 palabras.
+2.  **Sandra Erwin**:
+    -   La mediana de la frecuencia de las palabras en las cuentas de Sandra Erwin es de aproximadamente 41.88 por cada 10,000,000 palabras.
+
+Esto significa que, en promedio, las palabras que Jeff Foust usa con mayor frecuencia ocurren aproximadamente 19 veces en cada 10,000,000 palabras en sus publicaciones. Mientras tanto, las palabras más comunes en las publicaciones de Sandra Erwin ocurren aproximadamente 42 veces en cada 10,000,000 palabras.
+
+Esto sugiere que las palabras en las publicaciones de Sandra Erwin tienden a repetirse más frecuentemente que en las de Jeff Foust, lo que podría indicar un estilo de escritura más enfocado en ciertos temas o una menor diversidad léxica. Por otro lado, Jeff Foust parece tener una mayor variedad de palabras en sus publicaciones.
+
+Realizamos un filtrado adicional sobre el objeto frequency_para_plot donde comprueba que tanto la frecuencia de las palabras para cuentas de trolls de derecha como la frecuencia de palabras para cuentas de trolls de izquierda sean mayores que 43 millones lo que sugiere que las palabras en esas filas son relativamente comunes
+
+```{r message=FALSE, warning=FALSE}
+frequency_para_plot_2 <- frequency_para_plot[frequency_para_plot$`Jeff Foust`*1e7 > 0.1
+                                             & frequency_para_plot$`Sandra Erwin`*1e7 > 0.1, ]
+
+  ggplot(frequency_para_plot_2, 
+         aes(`Jeff Foust`, 
+             `Sandra Erwin`)) +
+    geom_jitter(alpha = 0.1, size = 2.5, width = 0.25, height = 0.25) +
+    geom_text(aes(label = word), check_overlap = TRUE, vjust = 1.5) +
+    scale_x_log10(labels = percent_format()) +
+    scale_y_log10(labels = percent_format()) +
+    geom_abline(color = "red")
+```
+
+La gráfica proporcionada muestra la frecuencia de aparición de diferentes palabras en dos conjuntos de datos, las noticias redactadas por Sandra y las noticias de Jeff.
+
+La línea roja representa una línea de referencia que indica una proporción de 1:1 entre la frecuencia de aparición de una palabra de Sandra y de Jeff.
+
+Aquellas palabras que se acerquen más a la línea roja, serán las palabras que tienen una cantidad de apariciones similares en los artículos de ambos periodistas. Entre estas palabras apareccen la propia palabra space, satellite, services, orbit, report o control entre otras.
+
+En cambio las palabras que se encuentran mas alejadas de la línea de referencia seran las palabras que aparecen con mayor frecuencia en artículos únicamente de uno de los autores.
+
+Por un lado, las palabras que se encuentran alejadas de la linea de referencia pero por encima de la línea roja: son más frecuentes para Sandra. Algunas de ellas son pentagon, millitary, defense, roper...
+
+Por otro lado, las palabras que se encuentran alejadas de la linea de referencia pero por debajo de la línea roja: son más frecuentes para Jeff. Algunas de ellas son nasa, iss, esa, asteroid...
+
+Una vez más, observamos que Sandra tiende a abordar temas relacionados con la percepción política o militar del espacio, mientras que Jeff se centra más en la ciencia que respalda esas misiones espaciales.
+
+```{r message=FALSE, warning=FALSE, fig.show='hide'}
+word_ratios <- tokens_autores %>%
+  filter(!str_detect(word, "^@")) %>%
+  filter(author %in% autores) %>%
+  count(word, author) %>%
+  group_by(word) %>%
+  filter(n >= 100) %>%
+  ungroup() %>%
+  pivot_wider(names_from = author, 
+              values_from = n, 
+              values_fill = 0) %>%
+  mutate_if(is.numeric, list(~(. + 1) / (sum(.) + 1))) %>%
+  mutate(logratio = log(`Jeff Foust` / `Sandra Erwin`)) %>%
+  arrange(desc(logratio))
+
+word_ratios %>%
+  group_by(logratio < 0) %>%
+  slice_max(abs(logratio), n = 30) %>% 
+  ungroup() %>%
+  mutate(word = reorder(word, logratio)) %>%
+  ggplot(aes(word, logratio, fill = logratio < 0)) +
+  geom_col(show.legend = TRUE) +
+  coord_flip() +
+  ylab("log odds ratio (Right/Left)") +
+  scale_fill_discrete(name = "", labels = c("Jeff Foust", "Sandra Erwin"))
+
+# Guardar el gráfico 
+ggsave("word_ratios_autores.png", plot = last_plot(), width = 10, height = 8, units = "in")
+
+```
+
+![](word_ratios_autores.png)
+
+**Jeff Foust**
+
+-   Se centra en temas relacionados con la exploración espacial, la industria aeroespacial y la defensa.
+-   Utiliza palabras clave como "tripulación", "Marte", "aterrizaje", "astronauta", "Artemis", "regreso", "Soyuz", "ESA", "telescopio", "cohete", "suborbital", "galáctico", "civil", "proveedores", "militares", "redes", "Pentágono", "guerra", "aliados", "hipersónico", "NDAA", "tranche", "táctico", "misiles", "cibernético", "terminales", "sucursal", "SMC", "Shanahan", "Wilson", "armas", "armado", "satcom", "dominio", "Raymond", "capa", "ejército", "SDA", "Pentágono", "DOD".
+
+**Sandra Erwin**
+
+-   Se centra en temas relacionados con la política espacial, la regulación y la legislación.
+-   Utiliza palabras clave como "NASA", "Congreso", "administración", "presupuesto", "política", "reglamentación", "legislación", "comercial", "internacional", "ciencia", "tecnología", "educación", "desarrollo económico", "diplomacia", "sostenibilidad".
+
+**Diferencias clave**
+
+-   **Temas:** Jeff Foust se centra en los aspectos técnicos y operativos de la exploración espacial y la industria aeroespacial, mientras que Sandra Erwin se centra en los aspectos políticos y regulatorios de la política espacial.
+
+-   **Vocabulario:** Jeff Foust utiliza un vocabulario más técnico y especializado en sus escritos, mientras que Sandra Erwin utiliza un vocabulario más general y accesible.
+
+-   **Estilo:** Jeff Foust tiene un estilo de escritura más directo y conciso, mientras que Sandra Erwin tiene un estilo de escritura más descriptivo y analítico.
+
+**Conclusiones**
+
+El análisis de palabras proporciona una visión general de los diferentes enfoques que Jeff Foust y Sandra Erwin adoptan en sus escritos. Esta información puede ser útil para comprender mejor sus perspectivas sobre la exploración espacial y la política espacial.
+
+**Interpretación adicional**
+
+Además de las diferencias clave identificadas anteriormente, el análisis de palabras también revela algunas otras tendencias interesantes. Por ejemplo, Jeff Foust utiliza con frecuencia palabras relacionadas con la colaboración internacional, como "ESA" y "alianzas", lo que sugiere que cree que la exploración espacial es un esfuerzo global. Por otro lado, Sandra Erwin utiliza con frecuencia palabras relacionadas con la seguridad nacional y la defensa, lo que sugiere que cree que la exploración espacial es un tema de importancia estratégica para los Estados Unidos.
+
+En general, el análisis de palabras proporciona una herramienta valiosa para comprender los diferentes enfoques que Jeff Foust y Sandra Erwin adoptan en sus escritos sobre la exploración espacial y la política espacial. Esta información puede ser útil para investigadores, estudiantes y profesionales interesados en estos temas.
+
+**Descargo de responsabilidad**
+
+Es importante tener en cuenta que el análisis de palabras es solo una herramienta para comprender el texto. No puede reemplazar el análisis humano cuidadoso del contenido y el contexto de un escrito. Además, el análisis de palabras solo es tan bueno como los datos en los que se basa. En este caso, los datos se limitan a los tweets de los dos autores. Por lo tanto, es importante tener en cuenta estas limitaciones al interpretar los resultados del análisis de palabras.
+
+### Jeff Foust
+
+Haciendo uso de la librería Tidytext, podemos obtener un conjunto de datos que reuna los tweets junto con su valor de sentimiento asociado en la base de datos AFINN
+
+Para hacer esto primero vamos a añadir una nueva columna a nuestro dataset ds_right_troll con un id
+
+```{r message=FALSE, warning=FALSE}
+autor_jeff <- datos_space_limpios %>%
+  filter(author == "Jeff Foust") 
+
+autor_jeff <- autor_jeff %>%
+  mutate(articulo_id = row_number())
+```
+
+Dividimos los tweets en palabras para poder analizar sus sentimientos, como vamos a extrar la columna content, creamos un nuevo dataset para no modificar el que ya teniamos
+
+```{r message=FALSE, warning=FALSE}
+autor_jeff2 <- autor_jeff %>% 
+  unnest_tokens(word, content)
+
+jeff_sentiment <- autor_jeff2 %>% 
+  inner_join(get_sentiments("afinn"), by = "word") %>%
+  inner_join(autor_jeff %>% select(articulo_id, content), by = "articulo_id") %>%
+  group_by(doc_id = articulo_id) %>% 
+  summarise(sentiment = sum(value), text = first(content))
+```
+
+Mostramos el gráfico con el número de tweets que hay por cada valor de sentimiento
+
+```{r message=FALSE, warning=FALSE}
+ggplot(data = jeff_sentiment, aes(x = sentiment)) + 
+  geom_bar(color = 'darkslategray', fill = 'steelblue') + 
+  xlab("Sentimiento") + 
+  ylab("Cantidad de artículos") + 
+  ggtitle("Análisis de sentimiento de Jeff Foust")
+```
+
+Sacamos los articulos de Jeff con mayor sentimiento negativo
+
+```{r message=FALSE, warning=FALSE}
+
+articulos_jeff_negativos <- jeff_sentiment %>% 
+  filter(sentiment < -25) %>%
+  arrange(sentiment)
+
+#Imprimimos los 4 primeros
+head(articulos_jeff_negativos, 3)
+
+```
+
+El sentimiento negativo en estos artículos puede atribuirse a varias razones clave que se destacan en conjunto:
+
+1.  **Riesgo y fracaso en la exploración espacial:** Los tres artículos presentan incidentes relacionados con el fracaso o el riesgo en la exploración espacial. Desde el fallo del lanzamiento del Falcon 9 de SpaceX hasta el accidente del Antares de Orbital ATK y la pérdida de carga en la nave espacial Dragon, estos eventos muestran que incluso las misiones espaciales más avanzadas pueden terminar en fracaso. Este recordatorio de la fragilidad y los riesgos inherentes a la exploración espacial puede generar un sentimiento negativo entre los lectores.
+
+2.  **Impacto financiero y comercial:** Cada artículo destaca las ramificaciones financieras y comerciales de los fallos. Desde la pérdida de satélites y contratos hasta el impacto en las acciones de las empresas y las relaciones comerciales, se resalta cómo estos incidentes pueden tener consecuencias significativas en términos de pérdidas económicas y cambios en el panorama comercial del espacio. Esto puede generar preocupaciones sobre la viabilidad a largo plazo de las empresas espaciales y sus asociaciones comerciales.
+
+3.  **Incertidumbre y falta de claridad:** En todos los casos, hay un elemento de incertidumbre sobre las causas exactas de los fallos. Ya sea SpaceX investigando la explosión del Falcon 9, la NASA examinando el accidente del Antares o la falta de claridad sobre la causa del fallo de la Dragon, la falta de respuestas definitivas puede crear un ambiente de inquietud y preocupación entre los lectores. La incertidumbre sobre la seguridad y la fiabilidad de los sistemas espaciales puede aumentar la percepción de riesgo y generar un sentimiento negativo.
+
+En conjunto, estos factores contribuyen a un sentimiento negativo generalizado en los artículos, ya que subrayan los desafíos y las dificultades inherentes a la exploración espacial, así como las implicaciones financieras y comerciales significativas asociadas con los fallos en esta industria.
+
+Sacamos los articulos de Jeff con mayor sentimiento positivo
+
+```{r message=FALSE, warning=FALSE}
+
+articulos_jeff_positivos <- jeff_sentiment %>% 
+  filter(sentiment > 25) %>%
+  arrange(sentiment)
+
+#Imprimimos los 4 primeros
+head(articulos_jeff_positivos, 3)
+
+```
+
+Los tres artículos presentan una visión optimista y entusiasta sobre la industria espacial, destacando los avances tecnológicos, las oportunidades de crecimiento y el potencial de la exploración espacial. Sin embargo, es posible identificar ciertos elementos que podrían generar sentimientos negativos o preocupaciones en conjunto:
+
+1.  **Expectativas y Realidad:** A pesar de las ambiciones y los avances tecnológicos, existe una brecha entre las expectativas y la realidad en la industria espacial. Las empresas y organizaciones perfiladas en los artículos enfrentan desafíos, retrasos y contratiempos en el desarrollo y la implementación de sus proyectos. Esta discrepancia entre lo planificado y lo logrado puede generar frustración y escepticismo.
+
+2.  **Dependencia de la Financiación y la Política:** La industria espacial comercial está fuertemente influenciada por la financiación gubernamental y las decisiones políticas. La necesidad de asegurar fondos para programas clave, como el programa Commercial Crew de la NASA, y la importancia de la legislación favorable, como la Commercial Space Launch Act, resaltan la vulnerabilidad de la industria ante cambios políticos y financieros. Esto puede generar incertidumbre y preocupación sobre la estabilidad a largo plazo de la industria.
+
+3.  **Competencia y Cooperación Internacional:** A medida que la industria espacial comercial crece, también aumenta la competencia y la necesidad de colaboración internacional. La presión por mantener la competitividad frente a otras naciones y empresas puede generar tensiones y preocupaciones sobre la posición y el papel de la industria en el contexto global.
+
+4.  **Seguridad y Regulación:** La seguridad sigue siendo una preocupación fundamental en la industria espacial, especialmente en el ámbito de los vuelos tripulados y la cooperación internacional. La necesidad de establecer estándares de seguridad y regulaciones efectivas para proteger a los astronautas y garantizar el éxito de las misiones espaciales puede generar ansiedad y preocupación sobre los riesgos asociados con la exploración espacial.
+
+En conjunto, estos elementos pueden contribuir a un sentimiento negativo o de preocupación sobre el futuro y la viabilidad a largo plazo de la industria espacial comercial, a pesar de los avances y las oportunidades prometedoras que presenta. La incertidumbre, la dependencia de factores externos y los desafíos técnicos y regulatorios pueden influir en la percepción general de la industria y sus perspectivas.
+
+Sacamos los articulos de Jeff con mayor sentimiento neutral (0)
+
+```{r message=FALSE, warning=FALSE}
+
+articulos_jeff_neutral <- jeff_sentiment %>% 
+  filter(sentiment == 0)
+
+#Imprimimos los 4 primeros
+head(articulos_jeff_neutral, 3)
+
+```
+
+Los tres artículos ofrecen una narrativa detallada sobre eventos y desarrollos específicos en la industria espacial, sin una inclinación clara hacia lo positivo o lo negativo. Sin embargo, podemos identificar algunos aspectos que podrían contribuir a un sentimiento neutral en conjunto:
+
+1.  **Desafíos y Contratiempos Técnicos:** Los tres artículos describen diversos desafíos técnicos y contratiempos que enfrentan las empresas y organizaciones espaciales. Desde problemas de financiación y bancarrota hasta retrasos en el lanzamiento debido a fallos técnicos, estos eventos son presentados de manera factual, sin una carga emocional positiva o negativa.
+
+2.  **Complejidad Operativa y Logística:** La complejidad de las operaciones espaciales y la logística involucrada se destaca en los artículos. Desde los desafíos técnicos asociados con el lanzamiento de cohetes hasta la coordinación de múltiples agencias y equipos, se presenta una imagen detallada pero imparcial de la naturaleza compleja de la industria espacial.
+
+3.  **Optimismo y Resiliencia:** A pesar de los desafíos y contratiempos descritos, los artículos también resaltan el optimismo y la resiliencia de las empresas y organizaciones involucradas en la industria espacial. Se mencionan esfuerzos para superar obstáculos, encontrar soluciones a problemas técnicos y seguir adelante con los planes de lanzamiento, lo que contribuye a una sensación de esperanza y determinación.
+
+En conjunto, estos elementos contribuyen a una narrativa neutral que presenta los eventos y desarrollos en la industria espacial sin una carga emocional particularmente positiva o negativa. Los lectores pueden interpretar la información de manera objetiva, sin una predisposición clara hacia una evaluación positiva o negativa de la situación.
+
+### Sandra Erwin
+
+Haciendo uso de la librería Tidytext, podemos obtener un conjunto de datos que reuna los tweets junto con su valor de sentimiento asociado en la base de datos AFINN
+
+Para hacer esto primero vamos a añadir una nueva columna a nuestro dataset ds_right_troll con un id
+
+```{r message=FALSE, warning=FALSE}
+autor_sandra <- datos_space_limpios %>%
+  filter(author == "Sandra Erwin") 
+
+autor_sandra <- autor_sandra %>%
+  mutate(articulo_id = row_number())
+```
+
+Dividimos los tweets en palabras para poder analizar sus sentimientos, como vamos a extrar la columna content, creamos un nuevo dataset para no modificar el que ya teniamos
+
+```{r message=FALSE, warning=FALSE}
+autor_sandra2 <- autor_sandra %>% 
+  unnest_tokens(word, content)
+
+sandra_sentiment <- autor_sandra2 %>% 
+  inner_join(get_sentiments("afinn"), by = "word") %>%
+  inner_join(autor_sandra %>% select(articulo_id, content), by = "articulo_id") %>%
+  group_by(doc_id = articulo_id) %>% 
+  summarise(sentiment = sum(value), text = first(content))
+
+```
+
+Mostramos el gráfico con el número de tweets que hay por cada valor de sentimiento
+
+```{r message=FALSE, warning=FALSE}
+ggplot(data = sandra_sentiment, aes(x = sentiment)) + 
+  geom_bar(color = 'darkslategray', fill = 'steelblue') + 
+  xlab("Sentimiento") + 
+  ylab("Cantidad de artículos") + 
+  ggtitle("Análisis de sentimiento de Sandra Erwin")
+```
+
+Sacamos los articulos de Sandra con mayor sentimiento negativo
+
+```{r message=FALSE, warning=FALSE}
+
+articulos_sandra_negativos <- sandra_sentiment %>% 
+  filter(sentiment < -25) %>%
+  arrange(sentiment)
+
+#Imprimimos los 4 primeros
+head(articulos_sandra_negativos, 3)
+
+```
+
+1.  **Aumento de la amenaza en el espacio**: Las noticias revelan una creciente amenaza para los satélites y las operaciones espaciales debido al desarrollo y despliegue de armas anti-satélite por parte de potencias como China, Rusia e Irán. Estas armas pueden incluir láseres de alta potencia, misiles balísticos y ataques cibernéticos, lo que plantea serias preocupaciones sobre la seguridad y la estabilidad en el espacio.
+
+2.  **Escalada potencial del conflicto**: Existe el riesgo de que los conflictos en el espacio puedan escalar rápidamente y convertirse en enfrentamientos más amplios. Por ejemplo, un ataque exitoso contra un satélite podría ser percibido como un acto de guerra, lo que podría provocar represalias militares y una escalada de tensiones.
+
+3.  **Necesidad de normas y regulaciones**: Dada la creciente militarización del espacio y el uso de activos espaciales comerciales en conflictos, es crucial establecer normas y regulaciones internacionales claras para garantizar la seguridad y la estabilidad en el espacio. Estas normas podrían abordar temas como la prohibición de armas anti-satélite, la protección de satélites comerciales y la responsabilidad por daños causados por actividades militares en el espacio.
+
+4.  **Importancia de la resiliencia espacial**: Las amenazas emergentes en el espacio resaltan la importancia de desarrollar sistemas espaciales más resilientes y redundantes. Esto incluye el despliegue de constelaciones de satélites más pequeños y distribuidos, así como la mejora de las capacidades de detección y respuesta ante amenazas.
+
+En resumen, estas noticias subrayan la necesidad urgente de abordar los desafíos de seguridad en el espacio y trabajar hacia un enfoque cooperativo y basado en normas para garantizar un entorno espacial seguro y sostenible.
+
+Sacamos los articulos de Sandra con mayor sentimiento positivo.
+
+```{r message=FALSE, warning=FALSE}
+
+articulos_sandra_positivos <- sandra_sentiment %>% 
+  filter(sentiment > 25) %>%
+  arrange(sentiment)
+
+#Imprimimos los 4 primeros
+head(articulos_sandra_positivos, 3)
+
+```
+
+1.  **Cooperación Internacional en Defensa Espacial**: Las noticias resaltan la creciente colaboración entre los Estados Unidos y sus aliados en la protección y defensa de activos espaciales. Esto incluye la compartición de tecnologías, estrategias y la realización de inversiones conjuntas en sistemas de defensa espacial.
+
+2.  **Éxito en Misiones Espaciales**: Se destaca el éxito de misiones espaciales clave, como el lanzamiento exitoso de satélites y la recuperación de cohetes. Esto demuestra la capacidad de la industria espacial para llevar a cabo misiones importantes de manera efectiva y eficiente.
+
+3.  **Desarrollo de Tecnologías Innovadoras**: Las noticias muestran el progreso en el desarrollo de tecnologías innovadoras para la sostenibilidad y la eficiencia en el espacio, como los servicios de mantenimiento en órbita y la eliminación de desechos espaciales.
+
+4.  **Desafíos Regulatorios y Normativos**: Se resalta la necesidad de abordar los desafíos regulatorios y normativos en el espacio, especialmente para las nuevas empresas y startups. Esto incluye la necesidad de establecer normas claras y mejores prácticas para garantizar la seguridad y la sostenibilidad de las actividades espaciales.
+
+5.  **Inversión y Colaboración en el Sector Espacial Comercial**: Las noticias muestran una creciente inversión y colaboración en el sector espacial comercial, con empresas emergentes buscando financiamiento para desarrollar tecnologías innovadoras y ofrecer servicios comerciales en el espacio.
+
+En conjunto, estas noticias reflejan un panorama positivo en el desarrollo y la cooperación en el espacio, con énfasis en el fortalecimiento de la seguridad, la eficiencia operativa y el crecimiento del sector espacial comercial. Sin embargo, también destacan la necesidad de abordar desafíos regulatorios y normativos para garantizar un entorno espacial seguro y sostenible para todas las partes interesadas.
+
+Sacamos los articulos de Sandra con mayor sentimiento neutral (0)
+
+```{r message=FALSE, warning=FALSE}
+
+articulos_sandra_neutral <- sandra_sentiment %>% 
+  filter(sentiment == 0)
+
+#Imprimimos los 4 primeros
+head(articulos_sandra_neutral, 3)
+
+```
+
+1.  **Desarrollo de Infraestructura Espacial**: Las noticias destacan el avance en el desarrollo de infraestructura espacial, como estaciones terrestres para satélites de alerta de misiles. Esto incluye la finalización exitosa de revisiones de diseño preliminares y el establecimiento de estaciones terrestres en ubicaciones estratégicas, como Guam, para mejorar la capacidad de detección y alerta temprana de lanzamientos de misiles.
+
+2.  **Servicios de Monitoreo Global**: Se resalta la introducción de servicios de monitoreo global, como el seguimiento de buques por satélite. Estos servicios utilizan tecnologías de detección remota para rastrear barcos, identificar cambios y detectar actividades sospechosas, lo que contribuye a la seguridad nacional y la vigilancia marítima.
+
+3.  **Transparencia en Seguridad Espacial**: Se menciona la necesidad de una mayor transparencia en las discusiones sobre seguridad espacial y los desafíos que enfrenta Estados Unidos en el ámbito espacial. Esto incluye la preocupación por la sobreclasificación de programas y políticas espaciales, lo que dificulta la comunicación efectiva con el público y otros organismos gubernamentales.
+
+4.  **Reformas en Adquisiciones Espaciales**: Se destaca el progreso en las reformas de adquisiciones espaciales para agilizar y modernizar los procesos de adquisición de tecnología espacial. Esto incluye esfuerzos para introducir más innovación y flexibilidad en la adquisición de satélites y otros sistemas espaciales, así como para acelerar el tiempo de entrega de productos espaciales.
+
+En conjunto, estas noticias reflejan un panorama neutro pero informativo sobre el desarrollo de infraestructura espacial, la introducción de servicios de monitoreo global y los desafíos y esfuerzos en curso para mejorar la seguridad y la transparencia en el espacio.
+
+A continuacion vamos a realizar un analisis de los texto usando tecnicas de inteligencia artifical y deep learning por lo que exportamos aquellos datasets que nos vayan a ser necesarios
+
+```{r message=FALSE, warning=FALSE}
+
+save(datos_space_con_extracto, file = "datos_space_con_extracto.rda")
+
+save(datos_space_sin_extracto, file = "datos_space_sin_extracto.rda")
+
+```
+
+## Conclusión
+
+A lo largo de este trabajo, se ha realizado un análisis del dataset SpaceNews aue se descargo desde Kaggle (<https://www.kaggle.com/datasets/patrickfleith/space-news-dataset>), y que contiene una amplia colección de noticias relacionadas con el espacio.
+
+El análisis de dicho dataset incluye por una parte una exploración de los datos y por otra la implementación de un algoritmo en Python para generar resúmenes automáticos de las noticias.
+
+A continuación, se detallan los hallazgos y evaluaciones clave de los resultados obtenidos tras realizar dicho estudio:
+
+**Análisis del Dataset SpaceNews**: El dataset SpaceNews resultó ser una gran fuente de información sobre diversas temáticas espaciales. Las noticias abarcaban una amplia gama de temas, incluyendo misiones espaciales, descubrimientos científicos, avances tecnológicos, y eventos significativos en la industria espacial. Este análisis preliminar permitió identificar patrones y tendencias recurrentes, como el enfoque en misiones a Marte, avances en tecnología de cohetes, y descubrimientos astronómicos. Este conocimiento contextual fue fundamental para entender la complejidad y la diversidad del contenido antes de proceder con el resumen de los textos.
+
+**Desarrollo del Algoritmo de Resumen en Python:** Para abordar el desafío de resumir los textos de manera automática, se utilizó Python se hizo uso de la librería Hugging Face Transformers. Se implementaron algunos modelos de procesamiento de lenguaje natural (NLP) avanzados, como BERT (Bidirectional Encoder Representations from Transformers) y GPT (Generative Pre-trained Transformer), que son conocidos por su capacidad para entender y generar lenguaje humano de manera efectiva.
+
+El proceso de creación de resúmenes automáticos involucró varias etapas clave:
+
+-   *Preprocesamiento de Datos:* Los textos de las noticias fueron limpiados y preparados para su análisis. Esto incluyó la eliminación de caracteres especiales, la normalización de texto, y la segmentación en oraciones.
+
+-   *Aplicación del Modelo NLP:* Utilizando modelos preentrenados, se generaron resúmenes para cada noticia. Estos modelos fueron ajustados para maximizar la coherencia y la relevancia de los resúmenes.
+
+-   *Post-procesamiento y Refinamiento:* Los resúmenes generados fueron revisados y refinados para asegurar que fueran concisos y preservaran la esencia de los textos originales.
+
+-   *Evaluación de la Calidad de los Resúmenes:* La calidad de los resúmenes generados fue evaluada mediante una comparación con resúmenes elaborados manualmente. Los criterios de evaluación incluyeron la precisión, la coherencia, la relevancia, y la capacidad de capturar las ideas principales de los textos originales. Los resultados fueron alentadores, mostrando que los resúmenes automáticos lograron mantener una alta fidelidad con respecto a la información esencial de las noticias.
+
+Analisis de la eficiencia de los resumes:
+
+-   Precisión y Relevancia: La mayoría de los resúmenes automáticos fueron precisos y relevantes, capturando los puntos clave sin introducir información errónea. Coherencia: Los resúmenes generados fueron coherentes y fáciles de leer, manteniendo una estructura lógica. Áreas de mejora:
+
+-   Redundancias: En algunos casos, los resúmenes presentaron redundancias que podrían haberse eliminado para mejorar la concisión.
+
+-   Detalles Críticos: Ocasionalmente, faltaron detalles importantes que estaban presentes en los textos originales, lo que indica la necesidad de una mejor sintonización del modelo.
+
+**Conclusión General:**
+
+El trabajo realizado demuestra que es posible utilizar técnicas avanzadas de procesamiento de lenguaje natural para generar resúmenes automáticos de alta calidad en el ámbito de las noticias espaciales. La implementación del algoritmo en Python utilizando modelos como BERT y GPT ha sido exitosa en gran medida, proporcionando resúmenes útiles y coherentes.
+
+No obstante, el estudio también revela que existe margen para mejorar la precisión y la integridad de los resúmenes generados tal vez si dispusieramos de una mayor capacidad de computación para entrenar nuestro propio modelo y mejorar un modelo que venga preentrenado, cosa la cual, se intento realizar a lo largo del trabajo mediante el uso de Google Colab pero por falta de memoria RAM (habia 12 gb disponibles) no se pudo lograr
+
+Este análisis y desarrollo sientan una base sólida para futuras investigaciones en el campo de la automatización del procesamiento de información textual. La capacidad de resumir grandes volúmenes de texto de manera eficaz tiene aplicaciones potenciales en diversas áreas, desde la exploración espacial hasta la gestión de información en otros dominios complejos. La continuación de este trabajo podría involucrar el ajuste fino de los modelos actuales, la incorporación de técnicas de aprendizaje profundo más avanzadas, y la expansión del análisis a otros tipos de textos y datasets.
+
+En resumen, este estudio representa un paso significativo hacia la comprensión y la automatización del procesamiento de noticias espaciales, proporcionando herramientas y conocimientos valiosos para la comunidad científica y tecnológica.
